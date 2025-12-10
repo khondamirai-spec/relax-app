@@ -232,12 +232,6 @@ export default function Player() {
              </div>
            </div>
 
-           {/* Loading indicator */}
-           {isLoading && (
-             <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full">
-               <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-             </div>
-           )}
         </div>
 
         {/* Info - Compact */}
@@ -274,9 +268,7 @@ export default function Player() {
             disabled={!musicUrl}
             className={`w-16 h-16 rounded-full flex items-center justify-center text-white bg-[#EE7D46] shadow-[0_8px_25px_rgba(238,125,70,0.4)] hover:bg-[#f08e5e] hover:scale-105 active:scale-95 transition-all ${!musicUrl ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {isLoading ? (
-              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-            ) : isPlaying ? (
+            {isPlaying ? (
               <Pause className="w-6 h-6 fill-current" />
             ) : (
               <Play className="w-6 h-6 fill-current ml-1" />
