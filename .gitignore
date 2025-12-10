@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Large audio files (optional - uncomment if you want to exclude large files from git)
+# Keep small files (<5MB) in git, exclude large ones
+# /public/music/*.mp3
+# /public/music/*.m4a
+# /public/music/*.wav
