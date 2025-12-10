@@ -30,6 +30,144 @@ export default function Player() {
   // Warn if using .weba format
   const isWebaFormat = musicUrl.includes('.weba') || r2Key?.endsWith('.weba');
 
+  // Debug: Log playlist on mount
+  useEffect(() => {
+    const playlistStr = localStorage.getItem('playlist');
+    if (playlistStr) {
+      try {
+        const playlist = JSON.parse(playlistStr);
+        console.log('Playlist loaded:', playlist);
+        console.log('Current song:', { title, subtitle });
+      } catch (e) {
+        console.error('Error parsing playlist:', e);
+      }
+    } else {
+      console.warn('No playlist in localStorage');
+    }
+  }, []);
+
+  const playNext = () => {
+    console.log('playNext called');
+    try {
+      const playlistStr = localStorage.getItem('playlist');
+      console.log('Playlist from localStorage:', playlistStr);
+      
+      if (!playlistStr) {
+        console.warn('No playlist found in localStorage');
+        alert('No playlist found. Please select a song from the dashboard first.');
+        return;
+      }
+
+      const playlist = JSON.parse(playlistStr);
+      console.log('Parsed playlist:', playlist);
+      
+      if (!Array.isArray(playlist) || playlist.length === 0) {
+        console.warn('Playlist is empty or invalid');
+        alert('Playlist is empty. Please select a song from the dashboard first.');
+        return;
+      }
+
+      // Find current song by matching title and subtitle
+      const currentIndex = playlist.findIndex((item: any) => 
+        item.title === title && item.subtitle === subtitle
+      );
+
+      console.log('Current song search:', { 
+        title, 
+        subtitle, 
+        currentIndex, 
+        playlistLength: playlist.length,
+        playlistItems: playlist.map((item: any) => ({ title: item.title, subtitle: item.subtitle }))
+      });
+
+      if (currentIndex !== -1 && currentIndex < playlist.length - 1) {
+        const nextItem = playlist[currentIndex + 1];
+        console.log('Next item:', nextItem);
+        
+        const params = new URLSearchParams({
+          title: nextItem.title,
+          subtitle: nextItem.subtitle,
+        });
+        
+        // Add optional parameters only if they exist
+        if (nextItem.fileId) params.set('fileId', nextItem.fileId);
+        if (nextItem.cloudinaryUrl) params.set('cloudinaryUrl', nextItem.cloudinaryUrl);
+        if (nextItem.localUrl) params.set('localUrl', nextItem.localUrl);
+        if (nextItem.r2Key) params.set('r2Key', nextItem.r2Key);
+        if (nextItem.r2PublicUrl) params.set('r2PublicUrl', nextItem.r2PublicUrl);
+
+        const newUrl = `/player?${params.toString()}`;
+        console.log('Navigating to:', newUrl);
+        window.location.href = newUrl;
+      } else if (currentIndex === -1) {
+        console.warn('Current song not found in playlist');
+        alert(`Current song "${title} - ${subtitle}" not found in playlist. Please select a song from the dashboard first.`);
+      } else {
+        console.log('Already at the last song');
+        alert('You are already at the last song in the playlist.');
+      }
+    } catch (error) {
+      console.error('Error playing next song:', error);
+      alert('Error playing next song. Check console for details.');
+    }
+  };
+
+  const playPrevious = () => {
+    console.log('playPrevious called');
+    try {
+      const playlistStr = localStorage.getItem('playlist');
+      
+      if (!playlistStr) {
+        console.warn('No playlist found in localStorage');
+        alert('No playlist found. Please select a song from the dashboard first.');
+        return;
+      }
+
+      const playlist = JSON.parse(playlistStr);
+      
+      if (!Array.isArray(playlist) || playlist.length === 0) {
+        console.warn('Playlist is empty or invalid');
+        alert('Playlist is empty. Please select a song from the dashboard first.');
+        return;
+      }
+
+      // Find current song by matching title and subtitle
+      const currentIndex = playlist.findIndex((item: any) => 
+        item.title === title && item.subtitle === subtitle
+      );
+
+      if (currentIndex !== -1 && currentIndex > 0) {
+        const prevItem = playlist[currentIndex - 1];
+        console.log('Previous item:', prevItem);
+        
+        const params = new URLSearchParams({
+          title: prevItem.title,
+          subtitle: prevItem.subtitle,
+        });
+        
+        // Add optional parameters only if they exist
+        if (prevItem.fileId) params.set('fileId', prevItem.fileId);
+        if (prevItem.cloudinaryUrl) params.set('cloudinaryUrl', prevItem.cloudinaryUrl);
+        if (prevItem.localUrl) params.set('localUrl', prevItem.localUrl);
+        if (prevItem.r2Key) params.set('r2Key', prevItem.r2Key);
+        if (prevItem.r2PublicUrl) params.set('r2PublicUrl', prevItem.r2PublicUrl);
+
+        const newUrl = `/player?${params.toString()}`;
+        console.log('Navigating to:', newUrl);
+        window.location.href = newUrl;
+      } else if (currentIndex === -1) {
+        console.warn('Current song not found in playlist');
+        alert(`Current song "${title} - ${subtitle}" not found in playlist. Please select a song from the dashboard first.`);
+      } else {
+        console.log('Already at the first song');
+        alert('You are already at the first song in the playlist.');
+      }
+    } catch (error) {
+      console.error('Error playing previous song:', error);
+      alert('Error playing previous song. Check console for details.');
+    }
+  };
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !musicUrl) return;
@@ -81,6 +219,8 @@ export default function Player() {
       setIsPlaying(false);
       setProgress(0);
       setCurrentTime(0);
+      // Auto-play next song when current song ends
+      playNext();
     };
 
     const handleWaiting = () => setIsLoading(true);
@@ -173,11 +313,27 @@ export default function Player() {
     }
   };
 
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+
+    const progressBar = e.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentage = clickX / rect.width;
+    const newTime = percentage * duration;
+
+    audio.currentTime = newTime;
+    setCurrentTime(newTime);
+    setProgress(percentage * 100);
+  };
+
   const formatTime = (seconds: number) => {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const mins = Math.floor(seconds / 60);
+    if (!seconds || isNaN(seconds)) return '0:00:00';
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -242,7 +398,10 @@ export default function Player() {
 
         {/* Progress - Compact */}
         <div className="w-full mt-6 space-y-2">
-          <div className="relative w-full h-1 bg-[#1C2340] rounded-full">
+          <div 
+            className="relative w-full h-1 bg-[#1C2340] rounded-full cursor-pointer"
+            onClick={handleProgressClick}
+          >
             <div 
               className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#EE7D46] to-[#F29E75] rounded-full transition-all"
               style={{ width: `${progress}%` }}
@@ -259,7 +418,10 @@ export default function Player() {
 
         {/* Controls - Compact */}
         <div className="flex items-center justify-between w-full max-w-[240px] mt-6">
-          <button className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors bg-[#0B1026] shadow-[-4px_-4px_8px_#161f47,4px_4px_8px_#000105] active:shadow-inset">
+          <button 
+            onClick={playPrevious}
+            className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors bg-[#0B1026] shadow-[-4px_-4px_8px_#161f47,4px_4px_8px_#000105] active:shadow-inset"
+          >
             <SkipBack className="w-5 h-5 fill-current" />
           </button>
           
@@ -275,7 +437,10 @@ export default function Player() {
             )}
           </button>
           
-          <button className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors bg-[#0B1026] shadow-[-4px_-4px_8px_#161f47,4px_4px_8px_#000105] active:shadow-inset">
+          <button 
+            onClick={playNext}
+            className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors bg-[#0B1026] shadow-[-4px_-4px_8px_#161f47,4px_4px_8px_#000105] active:shadow-inset"
+          >
             <SkipForward className="w-5 h-5 fill-current" />
           </button>
         </div>

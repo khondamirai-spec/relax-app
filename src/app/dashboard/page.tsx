@@ -11,8 +11,6 @@ import {
   Flower, 
   Command,
   Heart,
-  Music,
-  Zap,
   CloudRain
 } from "lucide-react";
 
@@ -57,12 +55,12 @@ export default function Dashboard() {
     },
     {
       id: '4',
-      title: 'Crystal Mind',
+      title: 'Healing - Tibetan Meditative Ambient Music - Beautiful Ethereal Relaxation Music',
       subtitle: 'Meditation',
-      icon: <Zap className="w-7 h-7" />,
+      icon: <Flower className="w-7 h-7" />,
       colorClass: 'bg-purple-100',
       category: 'Healing',
-      r2Key: 'Healing - Tibetan Meditative Ambient Music - Beautiful Ethereal Relaxing Music.mp3' // Cloudflare R2 object key
+      r2Key: 'Healing - Tibetan Meditative Ambient Music - Beautiful Ethereal Relaxation Music.mp3' // Cloudflare R2 object key
     },
     // Sleeping Items
     {
@@ -81,7 +79,7 @@ export default function Dashboard() {
       icon: <Moon className="w-7 h-7" />,
       colorClass: 'bg-blue-100',
       category: 'Sleeping',
-      driveFileId: '' // Add your Google Drive file ID here
+      r2Key: 'Healing - Tibetan Meditative Ambient Music - Beautiful Ethereal Relaxing Music.mp3' // Cloudflare R2 object key
     },
     // Top Items
     {
@@ -92,16 +90,6 @@ export default function Dashboard() {
       colorClass: 'bg-orange-100',
       category: 'Top',
       r2Key: 'Sinus Relief Music_ Healing Frequency for Nasal Congestion.mp3' // Cloudflare R2 object key
-    },
-    // Music Items
-    {
-      id: '8',
-      title: 'Lo-Fi Study',
-      subtitle: 'Focus',
-      icon: <Music className="w-7 h-7" />,
-      colorClass: 'bg-yellow-100',
-      category: 'Music',
-      r2Key: 'YTDown.com_YouTube_Gastritis-Healing-Frequency-Gas-Relief-&_Music.mp3' // Cloudflare R2 object key
     },
     // Relaxation Items
     {
@@ -118,28 +106,47 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen w-full bg-[#0B1026] text-white p-6 font-sans">
       
-      {/* Greeting */}
+      {/* Title */}
       <div className="mb-8 mt-4">
-        <h1 className="text-4xl font-normal text-white/90">Hello,</h1>
-        <h1 className="text-4xl font-semibold text-white">Steward</h1>
+        <h1 className="text-4xl font-semibold text-white">Overspread Tune's</h1>
       </div>
 
       {/* Music List Section */}
       <div className="flex flex-col gap-4">
         {items.map((item) => (
-          <div key={item.id} className="flex items-center justify-between p-4 bg-[#1C2340] rounded-3xl hover:bg-[#252d4d] transition-colors group animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 ${item.colorClass} rounded-2xl flex items-center justify-center text-[#0B1026]`}>
+          <div key={item.id} className="flex items-center justify-between p-4 bg-[#1C2340] rounded-2xl hover:bg-[#252d4d] transition-colors group">
+            <div className="flex items-center gap-4 flex-1">
+              <div className={`w-14 h-14 ${item.colorClass} rounded-xl flex items-center justify-center text-[#0B1026] shrink-0`}>
                 {item.icon}
               </div>
-              <div>
-                <h3 className="font-bold text-base">{item.title}</h3>
-                <p className="text-slate-400 text-sm">{item.subtitle}</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-lg text-white">{item.title}</h3>
+                <p className="text-slate-400 text-sm mt-0.5">{item.subtitle}</p>
               </div>
             </div>
-            <Link href={`/player?title=${encodeURIComponent(item.title)}&subtitle=${encodeURIComponent(item.subtitle)}&fileId=${item.driveFileId || ''}&cloudinaryUrl=${encodeURIComponent(item.cloudinaryUrl || '')}&localUrl=${encodeURIComponent(item.localUrl || '')}&r2Key=${encodeURIComponent(item.r2Key || '')}&r2PublicUrl=${encodeURIComponent(item.r2PublicUrl || '')}`}>
-              <button className="w-10 h-10 bg-[#1C2340] group-hover:bg-[#7C7AF3] rounded-full flex items-center justify-center transition-colors">
-                <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+            <Link 
+              href={`/player?title=${encodeURIComponent(item.title)}&subtitle=${encodeURIComponent(item.subtitle)}&fileId=${item.driveFileId || ''}&cloudinaryUrl=${encodeURIComponent(item.cloudinaryUrl || '')}&localUrl=${encodeURIComponent(item.localUrl || '')}&r2Key=${encodeURIComponent(item.r2Key || '')}&r2PublicUrl=${encodeURIComponent(item.r2PublicUrl || '')}`}
+              onClick={() => {
+                // Store playlist in localStorage for next/previous navigation
+                // Only store the necessary data (exclude React elements like icons)
+                if (typeof window !== 'undefined') {
+                  const playlistData = items.map(({ id, title, subtitle, category, driveFileId, cloudinaryUrl, localUrl, r2Key, r2PublicUrl }) => ({
+                    id,
+                    title,
+                    subtitle,
+                    category,
+                    fileId: driveFileId,
+                    cloudinaryUrl,
+                    localUrl,
+                    r2Key,
+                    r2PublicUrl
+                  }));
+                  localStorage.setItem('playlist', JSON.stringify(playlistData));
+                }
+              }}
+            >
+              <button className="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center shrink-0 transition-colors shadow-lg shadow-blue-500/30">
+                <Play className="w-5 h-5 text-white fill-white ml-0.5" />
               </button>
             </Link>
           </div>

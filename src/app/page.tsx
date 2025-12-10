@@ -34,8 +34,8 @@ export default function Home() {
                 <Trees className="w-[60%] h-[60%] text-white" />
               </div>
               <div className="leading-tight">
-                <h3 className="font-bold text-[min(14px,3.5vmin)] whitespace-nowrap">Nature Calm</h3>
-                <p className="text-[min(10px,2.5vmin)] text-white/80 uppercase tracking-wide">Ebook</p>
+                <h3 className="font-bold text-[min(14px,3.5vmin)] whitespace-nowrap">Tabiat Sokinligi</h3>
+                <p className="text-[min(10px,2.5vmin)] text-white/80 uppercase tracking-wide">E-kitob</p>
               </div>
               {/* Message Tail */}
               <div className="absolute -bottom-[10%] right-[20%] w-[15%] h-[15%] bg-[#2EB068] transform rotate-45 rounded-sm"></div>
@@ -49,8 +49,8 @@ export default function Home() {
                 <Flower className="w-[60%] h-[60%] text-white" />
               </div>
               <div className="leading-tight">
-                <h3 className="font-bold text-[min(14px,3.5vmin)] whitespace-nowrap">Meditation</h3>
-                <p className="text-[min(10px,2.5vmin)] text-white/80 whitespace-nowrap">Soft music</p>
+                <h3 className="font-bold text-[min(14px,3.5vmin)] whitespace-nowrap">Meditatsiya</h3>
+                <p className="text-[min(10px,2.5vmin)] text-white/80 whitespace-nowrap">Yumshoq musiqa</p>
               </div>
               {/* Message Tail - Positioned on left to point inward */}
               <div className="absolute -bottom-[10%] left-[20%] w-[15%] h-[15%] bg-[#EE7D46] transform rotate-45 rounded-sm"></div>
@@ -64,8 +64,8 @@ export default function Home() {
                 <Moon className="w-[60%] h-[60%] text-white fill-white" />
               </div>
               <div className="leading-tight">
-                <h3 className="font-bold text-[min(16px,4vmin)] whitespace-nowrap">Best Insomnia</h3>
-                <p className="text-[min(12px,3vmin)] text-slate-300">Music</p>
+                <h3 className="font-bold text-[min(16px,4vmin)] whitespace-nowrap">Uyqusizlik uchun eng yaxshi</h3>
+                <p className="text-[min(12px,3vmin)] text-slate-300">Musiqa</p>
               </div>
               {/* Message Tail */}
               <div className="absolute -bottom-[8%] right-[15%] w-[10%] h-[10%] bg-[#3A435E] transform rotate-45 rounded-sm"></div>
@@ -76,16 +76,16 @@ export default function Home() {
         {/* Text and Button Section */}
         <div className="flex flex-col items-center text-center gap-[5vh] w-full max-w-md mt-auto">
           <h1 className="text-[min(36px,8vmin)] font-semibold leading-tight">
-            Discover The Best <br />
-            Lovely Relaxing <br />
-            Space
+            Eng yaxshi go'zal <br />
+            dam olish makonini <br />
+            kashf eting
           </h1>
 
           <Link 
             href="/dashboard"
             className="bg-[#7C7AF3] hover:bg-[#6b69d6] active:scale-95 transition-all text-white font-medium text-[min(18px,4.5vmin)] py-[min(16px,4vmin)] w-full rounded-2xl shadow-lg shadow-indigo-500/20 flex items-center justify-center"
           >
-            Get Started
+            Boshlash
           </Link>
         </div>
       </main>
