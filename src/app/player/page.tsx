@@ -6,14 +6,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 export default function Player() {
+  const [mounted, setMounted] = useState(false);
   const searchParams = useSearchParams();
-  const title = searchParams.get('title') || 'Forest Sounds';
-  const subtitle = searchParams.get('subtitle') || 'Nature';
-  const fileId = searchParams.get('fileId') || '';
-  const cloudinaryUrl = searchParams.get('cloudinaryUrl') || '';
-  const localUrl = searchParams.get('localUrl') || '';
-  const r2Key = searchParams.get('r2Key') || '';
-  const r2PublicUrl = searchParams.get('r2PublicUrl') || '';
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -22,6 +16,22 @@ export default function Player() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const playPromiseRef = useRef<Promise<void> | null>(null);
+
+  // Set mounted to true after component mounts on client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Only access search params after component is mounted to avoid hydration mismatch
+  const title = mounted ? (searchParams.get('title') || 'Forest Sounds') : 'Forest Sounds';
+  const subtitle = mounted ? (searchParams.get('subtitle') || 'Nature') : 'Nature';
+  const fileId = mounted ? (searchParams.get('fileId') || '') : '';
+  const cloudinaryUrl = mounted ? (searchParams.get('cloudinaryUrl') || '') : '';
+  const localUrl = mounted ? (searchParams.get('localUrl') || '') : '';
+  const r2Key = mounted ? (searchParams.get('r2Key') || '') : '';
+  const r2PublicUrl = mounted ? (searchParams.get('r2PublicUrl') || '') : '';
+  const autoPlay = mounted ? (searchParams.get('autoPlay') === 'true') : false;
 
   // Priority: Cloudinary > R2 Public URL > Local > R2 (via API) > Google Drive
   // Note: .weba format may not be supported by all browsers - consider converting to MP3
@@ -95,6 +105,7 @@ export default function Player() {
         if (nextItem.localUrl) params.set('localUrl', nextItem.localUrl);
         if (nextItem.r2Key) params.set('r2Key', nextItem.r2Key);
         if (nextItem.r2PublicUrl) params.set('r2PublicUrl', nextItem.r2PublicUrl);
+        params.set('autoPlay', 'true'); // Auto-play next song
 
         const newUrl = `/player?${params.toString()}`;
         console.log('Navigating to:', newUrl);
@@ -151,6 +162,7 @@ export default function Player() {
         if (prevItem.localUrl) params.set('localUrl', prevItem.localUrl);
         if (prevItem.r2Key) params.set('r2Key', prevItem.r2Key);
         if (prevItem.r2PublicUrl) params.set('r2PublicUrl', prevItem.r2PublicUrl);
+        params.set('autoPlay', 'true'); // Auto-play previous song
 
         const newUrl = `/player?${params.toString()}`;
         console.log('Navigating to:', newUrl);
@@ -172,7 +184,14 @@ export default function Player() {
     const audio = audioRef.current;
     if (!audio || !musicUrl) return;
 
+    // Cancel any pending play promise before loading new audio
+    if (playPromiseRef.current) {
+      playPromiseRef.current.catch(() => {}); // Suppress any errors
+      playPromiseRef.current = null;
+    }
+
     // Reset audio when URL changes
+    audio.pause();
     audio.load();
     
     // Test if the URL is accessible and log details
@@ -294,28 +313,135 @@ export default function Player() {
     };
   }, [musicUrl]);
 
+  // Auto-play when page loads with autoPlay=true
+  useEffect(() => {
+    if (!autoPlay || !musicUrl) return;
+    
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setIsLoading(true);
+    
+    // Wait for audio to be ready, then play
+    const playWhenReady = () => {
+      // Cancel any existing play promise
+      if (playPromiseRef.current) {
+        playPromiseRef.current.catch(() => {});
+        playPromiseRef.current = null;
+      }
+      
+      const playPromise = audio.play();
+      playPromiseRef.current = playPromise;
+      playPromise
+        .then(() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+          playPromiseRef.current = null;
+        })
+        .catch((err) => {
+          console.error('Auto-play failed:', err);
+          setIsLoading(false);
+          playPromiseRef.current = null;
+          // Auto-play might be blocked by browser policy, that's okay
+        });
+    };
+
+    // Check if audio is already ready
+    if (audio.readyState >= 2) {
+      // Audio is already loaded enough to play
+      playWhenReady();
+    } else {
+      // Wait for audio to be ready
+      const handleCanPlayForAutoPlay = () => {
+        playWhenReady();
+      };
+      
+      audio.addEventListener('canplay', handleCanPlayForAutoPlay, { once: true });
+      
+      // Also try after loadedmetadata in case canplay doesn't fire
+      const handleLoadedMetadataForAutoPlay = () => {
+        // Small delay to ensure audio is ready
+        setTimeout(() => {
+          if (!isPlaying) {
+            playWhenReady();
+          }
+        }, 100);
+      };
+      
+      audio.addEventListener('loadedmetadata', handleLoadedMetadataForAutoPlay, { once: true });
+      
+      return () => {
+        audio.removeEventListener('canplay', handleCanPlayForAutoPlay);
+        audio.removeEventListener('loadedmetadata', handleLoadedMetadataForAutoPlay);
+      };
+    }
+  }, [autoPlay, musicUrl, isPlaying]);
+
+  const stopMusic = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    // Cancel any pending play promise before stopping
+    if (playPromiseRef.current) {
+      playPromiseRef.current.catch(() => {});
+      playPromiseRef.current = null;
+    }
+    
+    // Stop and reset to beginning
+    audio.pause();
+    audio.currentTime = 0;
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setProgress(0);
+  };
+
+
   const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio || !musicUrl) return;
 
     try {
       if (isPlaying) {
+        // Cancel any pending play promise before pausing
+        if (playPromiseRef.current) {
+          playPromiseRef.current.catch(() => {});
+          playPromiseRef.current = null;
+        }
         audio.pause();
         setIsPlaying(false);
       } else {
         setIsLoading(true);
-        await audio.play();
+        // Cancel any existing play promise
+        if (playPromiseRef.current) {
+          playPromiseRef.current.catch(() => {});
+          playPromiseRef.current = null;
+        }
+        const playPromise = audio.play();
+        playPromiseRef.current = playPromise;
+        await playPromise;
         setIsPlaying(true);
+        setIsLoading(false);
+        playPromiseRef.current = null;
       }
     } catch (error) {
       console.error('Playback error:', error);
       setIsLoading(false);
+      playPromiseRef.current = null;
     }
   };
 
-  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleProgressClick = async (e: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
     if (!audio || !duration) return;
+
+    // Store whether audio was playing before seeking
+    const wasPlaying = isPlaying;
+
+    // Cancel any pending play promise before seeking
+    if (playPromiseRef.current) {
+      playPromiseRef.current.catch(() => {});
+      playPromiseRef.current = null;
+    }
 
     const progressBar = e.currentTarget;
     const rect = progressBar.getBoundingClientRect();
@@ -323,9 +449,24 @@ export default function Player() {
     const percentage = clickX / rect.width;
     const newTime = percentage * duration;
 
+    // Update the time
     audio.currentTime = newTime;
     setCurrentTime(newTime);
     setProgress(percentage * 100);
+
+    // If it was playing before, continue playing after seeking
+    if (wasPlaying) {
+      try {
+        const playPromise = audio.play();
+        playPromiseRef.current = playPromise;
+        await playPromise;
+        setIsPlaying(true);
+        playPromiseRef.current = null;
+      } catch (error) {
+        console.error('Error resuming playback after seek:', error);
+        playPromiseRef.current = null;
+      }
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -335,6 +476,16 @@ export default function Player() {
     const secs = Math.floor(seconds % 60);
     return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+
+  // Don't render until mounted to avoid hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="min-h-screen w-full bg-[#0B1026] text-white flex flex-col font-sans relative overflow-hidden items-center justify-center">
+        <div className="text-slate-400">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#0B1026] text-white flex flex-col font-sans relative overflow-hidden items-center justify-center">
@@ -428,6 +579,7 @@ export default function Player() {
           <button 
             onClick={togglePlay}
             disabled={!musicUrl}
+            title="Click to play/pause"
             className={`w-16 h-16 rounded-full flex items-center justify-center text-white bg-[#EE7D46] shadow-[0_8px_25px_rgba(238,125,70,0.4)] hover:bg-[#f08e5e] hover:scale-105 active:scale-95 transition-all ${!musicUrl ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isPlaying ? (
@@ -444,6 +596,7 @@ export default function Player() {
             <SkipForward className="w-5 h-5 fill-current" />
           </button>
         </div>
+
 
         {/* Error message */}
         {error && (

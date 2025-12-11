@@ -125,7 +125,7 @@ export default function Dashboard() {
               </div>
             </div>
             <Link 
-              href={`/player?title=${encodeURIComponent(item.title)}&subtitle=${encodeURIComponent(item.subtitle)}&fileId=${item.driveFileId || ''}&cloudinaryUrl=${encodeURIComponent(item.cloudinaryUrl || '')}&localUrl=${encodeURIComponent(item.localUrl || '')}&r2Key=${encodeURIComponent(item.r2Key || '')}&r2PublicUrl=${encodeURIComponent(item.r2PublicUrl || '')}`}
+              href={`/player?title=${encodeURIComponent(item.title)}&subtitle=${encodeURIComponent(item.subtitle)}&fileId=${item.driveFileId || ''}&cloudinaryUrl=${encodeURIComponent(item.cloudinaryUrl || '')}&localUrl=${encodeURIComponent(item.localUrl || '')}&r2Key=${encodeURIComponent(item.r2Key || '')}&r2PublicUrl=${encodeURIComponent(item.r2PublicUrl || '')}&autoPlay=true`}
               onClick={() => {
                 // Store playlist in localStorage for next/previous navigation
                 // Only store the necessary data (exclude React elements like icons)
