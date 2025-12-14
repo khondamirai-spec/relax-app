@@ -34,7 +34,7 @@ export default function Home() {
                 <Trees className="w-[60%] h-[60%] text-white" />
               </div>
               <div className="leading-tight">
-                <h3 className="font-bold text-[min(14px,3.5vmin)] whitespace-nowrap">Tabiat Sokinligi</h3>
+                <h3 className="font-bold text-[min(12px,3vmin)] whitespace-nowrap">Tabiat Sokinligi</h3>
                 <p className="text-[min(10px,2.5vmin)] text-white/80 uppercase tracking-wide">E-kitob</p>
               </div>
               {/* Message Tail */}
@@ -64,7 +64,7 @@ export default function Home() {
                 <Moon className="w-[60%] h-[60%] text-white fill-white" />
               </div>
               <div className="leading-tight">
-                <h3 className="font-bold text-[min(16px,4vmin)] whitespace-nowrap">Uyqusizlik uchun eng yaxshi</h3>
+                <h3 className="font-bold text-[min(16px,4vmin)] whitespace-nowrap">Uyqusizlik uchun</h3>
                 <p className="text-[min(12px,3vmin)] text-slate-300">Musiqa</p>
               </div>
               {/* Message Tail */}

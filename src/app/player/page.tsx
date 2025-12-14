@@ -1,9 +1,37 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { ChevronLeft, Menu, SkipBack, Play, Pause, SkipForward } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { 
+  ChevronLeft, 
+  Menu, 
+  X,
+  SkipBack, 
+  Play, 
+  Pause, 
+  SkipForward,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Heart,
+  ListMusic
+} from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+
+type RepeatMode = 'off' | 'all' | 'one';
+
+interface PlaylistItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  category?: string;
+  fileId?: string;
+  cloudinaryUrl?: string;
+  localUrl?: string;
+  r2Key?: string;
+  r2PublicUrl?: string;
+  image?: string;
+}
 
 export default function Player() {
   const [mounted, setMounted] = useState(false);
@@ -15,17 +43,50 @@ export default function Player() {
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // New state for enhanced controls
+  const [volume, setVolume] = useState(0.7);
+  const [isMuted, setIsMuted] = useState(false);
+  const [previousVolume, setPreviousVolume] = useState(0.7);
+  const [isShuffled, setIsShuffled] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
+  const [isLiked, setIsLiked] = useState(false);
+  const [showPlaylist, setShowPlaylist] = useState(false);
+  const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
+  const [shuffledOrder, setShuffledOrder] = useState<number[]>([]);
+  const [likedSongs, setLikedSongs] = useState<Set<string>>(new Set());
+  
   const audioRef = useRef<HTMLAudioElement>(null);
   const playPromiseRef = useRef<Promise<void> | null>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
   // Set mounted to true after component mounts on client
   useEffect(() => {
     setMounted(true);
+    
+    // Load saved preferences
+    const savedVolume = localStorage.getItem('playerVolume');
+    const savedMuted = localStorage.getItem('playerMuted');
+    const savedShuffle = localStorage.getItem('playerShuffle');
+    const savedRepeat = localStorage.getItem('playerRepeat');
+    const savedLikes = localStorage.getItem('likedSongs');
+    
+    if (savedVolume) setVolume(parseFloat(savedVolume));
+    if (savedMuted) setIsMuted(savedMuted === 'true');
+    if (savedShuffle) setIsShuffled(savedShuffle === 'true');
+    if (savedRepeat) setRepeatMode(savedRepeat as RepeatMode);
+    if (savedLikes) {
+      try {
+        setLikedSongs(new Set(JSON.parse(savedLikes)));
+      } catch (e) {
+        console.error('Error parsing liked songs:', e);
+      }
+    }
   }, []);
 
   // Only access search params after component is mounted to avoid hydration mismatch
-  const title = mounted ? (searchParams.get('title') || 'Forest Sounds') : 'Forest Sounds';
-  const subtitle = mounted ? (searchParams.get('subtitle') || 'Nature') : 'Nature';
+  const title = mounted ? (searchParams.get('title') || 'O\'rmon Tovushlari') : 'O\'rmon Tovushlari';
+  const subtitle = mounted ? (searchParams.get('subtitle') || 'Tabiat') : 'Tabiat';
   const fileId = mounted ? (searchParams.get('fileId') || '') : '';
   const cloudinaryUrl = mounted ? (searchParams.get('cloudinaryUrl') || '') : '';
   const localUrl = mounted ? (searchParams.get('localUrl') || '') : '';
@@ -33,152 +94,150 @@ export default function Player() {
   const r2PublicUrl = mounted ? (searchParams.get('r2PublicUrl') || '') : '';
   const autoPlay = mounted ? (searchParams.get('autoPlay') === 'true') : false;
 
+  // Check if current song is liked
+  useEffect(() => {
+    const songId = `${title}-${subtitle}`;
+    setIsLiked(likedSongs.has(songId));
+  }, [title, subtitle, likedSongs]);
+
   // Priority: Cloudinary > R2 Public URL > Local > R2 (via API) > Google Drive
-  // Note: .weba format may not be supported by all browsers - consider converting to MP3
   const musicUrl = cloudinaryUrl || r2PublicUrl || localUrl || (r2Key ? `/api/r2/stream?key=${encodeURIComponent(r2Key)}` : '') || (fileId ? `/api/stream?id=${fileId}` : '');
   
   // Warn if using .weba format
   const isWebaFormat = musicUrl.includes('.weba') || r2Key?.endsWith('.weba');
 
-  // Debug: Log playlist on mount
+  // Load playlist on mount
   useEffect(() => {
     const playlistStr = localStorage.getItem('playlist');
     if (playlistStr) {
       try {
-        const playlist = JSON.parse(playlistStr);
-        console.log('Playlist loaded:', playlist);
-        console.log('Current song:', { title, subtitle });
+        const loadedPlaylist = JSON.parse(playlistStr);
+        setPlaylist(loadedPlaylist);
+        console.log('Playlist loaded:', loadedPlaylist);
+        
+        // Generate shuffled order
+        const order = loadedPlaylist.map((_: any, i: number) => i);
+        shuffleArray(order);
+        setShuffledOrder(order);
       } catch (e) {
         console.error('Error parsing playlist:', e);
       }
-    } else {
-      console.warn('No playlist in localStorage');
     }
   }, []);
 
-  const playNext = () => {
-    console.log('playNext called');
-    try {
-      const playlistStr = localStorage.getItem('playlist');
-      console.log('Playlist from localStorage:', playlistStr);
-      
-      if (!playlistStr) {
-        console.warn('No playlist found in localStorage');
-        alert('No playlist found. Please select a song from the dashboard first.');
-        return;
-      }
-
-      const playlist = JSON.parse(playlistStr);
-      console.log('Parsed playlist:', playlist);
-      
-      if (!Array.isArray(playlist) || playlist.length === 0) {
-        console.warn('Playlist is empty or invalid');
-        alert('Playlist is empty. Please select a song from the dashboard first.');
-        return;
-      }
-
-      // Find current song by matching title and subtitle
-      const currentIndex = playlist.findIndex((item: any) => 
-        item.title === title && item.subtitle === subtitle
-      );
-
-      console.log('Current song search:', { 
-        title, 
-        subtitle, 
-        currentIndex, 
-        playlistLength: playlist.length,
-        playlistItems: playlist.map((item: any) => ({ title: item.title, subtitle: item.subtitle }))
-      });
-
-      if (currentIndex !== -1 && currentIndex < playlist.length - 1) {
-        const nextItem = playlist[currentIndex + 1];
-        console.log('Next item:', nextItem);
-        
-        const params = new URLSearchParams({
-          title: nextItem.title,
-          subtitle: nextItem.subtitle,
-        });
-        
-        // Add optional parameters only if they exist
-        if (nextItem.fileId) params.set('fileId', nextItem.fileId);
-        if (nextItem.cloudinaryUrl) params.set('cloudinaryUrl', nextItem.cloudinaryUrl);
-        if (nextItem.localUrl) params.set('localUrl', nextItem.localUrl);
-        if (nextItem.r2Key) params.set('r2Key', nextItem.r2Key);
-        if (nextItem.r2PublicUrl) params.set('r2PublicUrl', nextItem.r2PublicUrl);
-        params.set('autoPlay', 'true'); // Auto-play next song
-
-        const newUrl = `/player?${params.toString()}`;
-        console.log('Navigating to:', newUrl);
-        window.location.href = newUrl;
-      } else if (currentIndex === -1) {
-        console.warn('Current song not found in playlist');
-        alert(`Current song "${title} - ${subtitle}" not found in playlist. Please select a song from the dashboard first.`);
-      } else {
-        console.log('Already at the last song');
-        alert('You are already at the last song in the playlist.');
-      }
-    } catch (error) {
-      console.error('Error playing next song:', error);
-      alert('Error playing next song. Check console for details.');
+  // Fisher-Yates shuffle
+  const shuffleArray = (array: number[]) => {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
     }
+    return array;
   };
 
-  const playPrevious = () => {
-    console.log('playPrevious called');
-    try {
-      const playlistStr = localStorage.getItem('playlist');
-      
-      if (!playlistStr) {
-        console.warn('No playlist found in localStorage');
-        alert('No playlist found. Please select a song from the dashboard first.');
-        return;
-      }
+  // Get current song index in playlist
+  const getCurrentIndex = useCallback(() => {
+    return playlist.findIndex((item) => 
+      item.title === title && item.subtitle === subtitle
+    );
+  }, [playlist, title, subtitle]);
 
-      const playlist = JSON.parse(playlistStr);
-      
-      if (!Array.isArray(playlist) || playlist.length === 0) {
-        console.warn('Playlist is empty or invalid');
-        alert('Playlist is empty. Please select a song from the dashboard first.');
-        return;
-      }
+  // Navigate to a specific playlist item
+  const navigateToSong = useCallback((item: PlaylistItem) => {
+    const params = new URLSearchParams({
+      title: item.title,
+      subtitle: item.subtitle,
+    });
+    
+    if (item.fileId) params.set('fileId', item.fileId);
+    if (item.cloudinaryUrl) params.set('cloudinaryUrl', item.cloudinaryUrl);
+    if (item.localUrl) params.set('localUrl', item.localUrl);
+    if (item.r2Key) params.set('r2Key', item.r2Key);
+    if (item.r2PublicUrl) params.set('r2PublicUrl', item.r2PublicUrl);
+    params.set('autoPlay', 'true');
 
-      // Find current song by matching title and subtitle
-      const currentIndex = playlist.findIndex((item: any) => 
-        item.title === title && item.subtitle === subtitle
-      );
+    window.location.href = `/player?${params.toString()}`;
+  }, []);
 
-      if (currentIndex !== -1 && currentIndex > 0) {
-        const prevItem = playlist[currentIndex - 1];
-        console.log('Previous item:', prevItem);
-        
-        const params = new URLSearchParams({
-          title: prevItem.title,
-          subtitle: prevItem.subtitle,
-        });
-        
-        // Add optional parameters only if they exist
-        if (prevItem.fileId) params.set('fileId', prevItem.fileId);
-        if (prevItem.cloudinaryUrl) params.set('cloudinaryUrl', prevItem.cloudinaryUrl);
-        if (prevItem.localUrl) params.set('localUrl', prevItem.localUrl);
-        if (prevItem.r2Key) params.set('r2Key', prevItem.r2Key);
-        if (prevItem.r2PublicUrl) params.set('r2PublicUrl', prevItem.r2PublicUrl);
-        params.set('autoPlay', 'true'); // Auto-play previous song
-
-        const newUrl = `/player?${params.toString()}`;
-        console.log('Navigating to:', newUrl);
-        window.location.href = newUrl;
-      } else if (currentIndex === -1) {
-        console.warn('Current song not found in playlist');
-        alert(`Current song "${title} - ${subtitle}" not found in playlist. Please select a song from the dashboard first.`);
-      } else {
-        console.log('Already at the first song');
-        alert('You are already at the first song in the playlist.');
-      }
-    } catch (error) {
-      console.error('Error playing previous song:', error);
-      alert('Error playing previous song. Check console for details.');
+  const playNext = useCallback(() => {
+    if (playlist.length === 0) {
+      alert('Pleylist topilmadi. Iltimos, avval bosh sahifadan qo\'shiq tanlang.');
+      return;
     }
-  };
+
+    const currentIndex = getCurrentIndex();
+    
+    if (currentIndex === -1) {
+      alert(`Joriy qo\'shiq pleylistda topilmadi.`);
+      return;
+    }
+
+    let nextIndex: number;
+    
+    if (isShuffled) {
+      const currentShuffledPos = shuffledOrder.indexOf(currentIndex);
+      const nextShuffledPos = (currentShuffledPos + 1) % shuffledOrder.length;
+      nextIndex = shuffledOrder[nextShuffledPos];
+    } else {
+      nextIndex = (currentIndex + 1) % playlist.length;
+    }
+
+    // If repeat is off and we're at the end, don't wrap around
+    if (repeatMode === 'off' && !isShuffled && currentIndex === playlist.length - 1) {
+      alert('Pleylist tugadi');
+      return;
+    }
+
+    navigateToSong(playlist[nextIndex]);
+  }, [playlist, getCurrentIndex, isShuffled, shuffledOrder, repeatMode, navigateToSong]);
+
+  const playPrevious = useCallback(() => {
+    if (playlist.length === 0) {
+      alert('Pleylist topilmadi. Iltimos, avval bosh sahifadan qo\'shiq tanlang.');
+      return;
+    }
+
+    const currentIndex = getCurrentIndex();
+    
+    if (currentIndex === -1) {
+      alert(`Joriy qo\'shiq pleylistda topilmadi.`);
+      return;
+    }
+
+    // If we're more than 3 seconds in, restart the current song
+    if (currentTime > 3) {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+        setProgress(0);
+      }
+      return;
+    }
+
+    let prevIndex: number;
+    
+    if (isShuffled) {
+      const currentShuffledPos = shuffledOrder.indexOf(currentIndex);
+      const prevShuffledPos = (currentShuffledPos - 1 + shuffledOrder.length) % shuffledOrder.length;
+      prevIndex = shuffledOrder[prevShuffledPos];
+    } else {
+      prevIndex = (currentIndex - 1 + playlist.length) % playlist.length;
+    }
+
+    // If repeat is off and we're at the beginning, don't wrap around
+    if (repeatMode === 'off' && !isShuffled && currentIndex === 0) {
+      // Just restart current song
+      const audio = audioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+        setProgress(0);
+      }
+      return;
+    }
+
+    navigateToSong(playlist[prevIndex]);
+  }, [playlist, getCurrentIndex, isShuffled, shuffledOrder, repeatMode, currentTime, navigateToSong]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -186,7 +245,7 @@ export default function Player() {
 
     // Cancel any pending play promise before loading new audio
     if (playPromiseRef.current) {
-      playPromiseRef.current.catch(() => {}); // Suppress any errors
+      playPromiseRef.current.catch(() => {});
       playPromiseRef.current = null;
     }
 
@@ -194,7 +253,10 @@ export default function Player() {
     audio.pause();
     audio.load();
     
-    // Test if the URL is accessible and log details
+    // Set volume
+    audio.volume = isMuted ? 0 : volume;
+    
+    // Test if the URL is accessible
     fetch(musicUrl)
       .then(async response => {
         const contentType = response.headers.get('content-type') || '';
@@ -207,19 +269,16 @@ export default function Player() {
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          setError(`Error ${response.status}: ${errorData.error || 'Failed to load file. Make sure your R2 configuration is correct.'}`);
+          setError(`Xato ${response.status}: ${errorData.error || 'Faylni yuklash amalga oshmadi.'}`);
         } else {
-          // Check if it's audio or binary (audio files might be octet-stream)
           if (contentType.includes('text/html') || contentType.includes('application/json')) {
-            setError('File is not accessible. Please check your R2 configuration and file key.');
-          } else if (!contentType.includes('audio') && !musicUrl.includes('.mp3')) {
-            console.warn('Content-Type might not be audio:', contentType);
+            setError('Fayl mavjud emas. Iltimos, sozlamalarni tekshiring.');
           }
         }
       })
       .catch(err => {
         console.error('Failed to check audio URL:', err);
-        setError('Network error. Please check your connection and R2 configuration.');
+        setError('Tarmoq xatosi. Iltimos, internet aloqangizni tekshiring.');
       });
 
     const updateProgress = () => {
@@ -238,8 +297,14 @@ export default function Player() {
       setIsPlaying(false);
       setProgress(0);
       setCurrentTime(0);
-      // Auto-play next song when current song ends
-      playNext();
+      
+      // Handle repeat modes
+      if (repeatMode === 'one') {
+        audio.currentTime = 0;
+        audio.play().then(() => setIsPlaying(true)).catch(console.error);
+      } else {
+        playNext();
+      }
     };
 
     const handleWaiting = () => setIsLoading(true);
@@ -250,50 +315,20 @@ export default function Player() {
     const handleError = () => {
       setIsLoading(false);
       const audioError = audio.error;
-      let errorMessage = 'Failed to load audio.';
+      let errorMessage = 'Audioni yuklashda xatolik.';
       
       if (audioError) {
         const errorCode = audioError.code;
         const errorMessages: { [key: number]: string } = {
-          1: 'Media aborted',
-          2: 'Network error - check your connection',
-          3: 'Decode error - file format may not be supported by your browser',
-          4: 'Source not supported - your browser cannot play this audio format',
+          1: 'Media to\'xtatildi',
+          2: 'Tarmoq xatosi - internet aloqangizni tekshiring',
+          3: 'Dekodlash xatosi - fayl formati qo\'llab-quvvatlanmasligi mumkin',
+          4: 'Manba qo\'llab-quvvatlanmaydi - brauzer bu formatni ijro eta olmaydi',
         };
-        const codeMessage = errorMessages[errorCode] || `Error code ${errorCode}`;
-        errorMessage = `${codeMessage}.`;
-        
-        // Add helpful hints based on source URL
-        if (musicUrl.includes('/api/r2/stream')) {
-          if (musicUrl.includes('.weba') || r2Key?.endsWith('.weba')) {
-            errorMessage += ' The .weba format is not widely supported. Please convert your file to MP3 or enable R2 public access.';
-          } else {
-            errorMessage += ' Check your R2 configuration and file key.';
-          }
-        } else if (musicUrl.includes('/api/stream')) {
-          errorMessage += ' Make sure the file is shared publicly on Google Drive.';
-        } else if (musicUrl.includes('cloudinary.com')) {
-          errorMessage += ' Check your Cloudinary URL.';
-        } else if (musicUrl.startsWith('/')) {
-          errorMessage += ' Check that the local file exists.';
-        }
-      } else {
-        errorMessage = 'Failed to load audio. Please check the file URL and try again.';
+        errorMessage = errorMessages[errorCode] || `Xato kodi ${errorCode}`;
       }
       
       setError(errorMessage);
-      if (audioError) {
-        console.error('Audio error:', {
-          code: audioError.code,
-          message: audioError.message,
-          url: musicUrl,
-          format: r2Key || 'unknown',
-          MEDIA_ERR_ABORTED: 1,
-          MEDIA_ERR_NETWORK: 2,
-          MEDIA_ERR_DECODE: 3,
-          MEDIA_ERR_SRC_NOT_SUPPORTED: 4,
-        });
-      }
     };
 
     audio.addEventListener('timeupdate', updateProgress);
@@ -311,7 +346,7 @@ export default function Player() {
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [musicUrl]);
+  }, [musicUrl, repeatMode, playNext]);
 
   // Auto-play when page loads with autoPlay=true
   useEffect(() => {
@@ -322,9 +357,7 @@ export default function Player() {
 
     setIsLoading(true);
     
-    // Wait for audio to be ready, then play
     const playWhenReady = () => {
-      // Cancel any existing play promise
       if (playPromiseRef.current) {
         playPromiseRef.current.catch(() => {});
         playPromiseRef.current = null;
@@ -342,59 +375,40 @@ export default function Player() {
           console.error('Auto-play failed:', err);
           setIsLoading(false);
           playPromiseRef.current = null;
-          // Auto-play might be blocked by browser policy, that's okay
         });
     };
 
-    // Check if audio is already ready
     if (audio.readyState >= 2) {
-      // Audio is already loaded enough to play
       playWhenReady();
     } else {
-      // Wait for audio to be ready
-      const handleCanPlayForAutoPlay = () => {
-        playWhenReady();
-      };
-      
+      const handleCanPlayForAutoPlay = () => playWhenReady();
       audio.addEventListener('canplay', handleCanPlayForAutoPlay, { once: true });
-      
-      // Also try after loadedmetadata in case canplay doesn't fire
-      const handleLoadedMetadataForAutoPlay = () => {
-        // Small delay to ensure audio is ready
-        setTimeout(() => {
-          if (!isPlaying) {
-            playWhenReady();
-          }
-        }, 100);
-      };
-      
-      audio.addEventListener('loadedmetadata', handleLoadedMetadataForAutoPlay, { once: true });
       
       return () => {
         audio.removeEventListener('canplay', handleCanPlayForAutoPlay);
-        audio.removeEventListener('loadedmetadata', handleLoadedMetadataForAutoPlay);
       };
     }
-  }, [autoPlay, musicUrl, isPlaying]);
+  }, [autoPlay, musicUrl]);
 
-  const stopMusic = () => {
+  // Update audio volume when volume state changes
+  useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
-    
-    // Cancel any pending play promise before stopping
-    if (playPromiseRef.current) {
-      playPromiseRef.current.catch(() => {});
-      playPromiseRef.current = null;
+    if (audio) {
+      audio.volume = isMuted ? 0 : volume;
     }
-    
-    // Stop and reset to beginning
-    audio.pause();
-    audio.currentTime = 0;
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setProgress(0);
-  };
+    // Save to localStorage
+    localStorage.setItem('playerVolume', volume.toString());
+    localStorage.setItem('playerMuted', isMuted.toString());
+  }, [volume, isMuted]);
 
+  // Save preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('playerShuffle', isShuffled.toString());
+  }, [isShuffled]);
+
+  useEffect(() => {
+    localStorage.setItem('playerRepeat', repeatMode);
+  }, [repeatMode]);
 
   const togglePlay = async () => {
     const audio = audioRef.current;
@@ -402,7 +416,6 @@ export default function Player() {
 
     try {
       if (isPlaying) {
-        // Cancel any pending play promise before pausing
         if (playPromiseRef.current) {
           playPromiseRef.current.catch(() => {});
           playPromiseRef.current = null;
@@ -411,7 +424,6 @@ export default function Player() {
         setIsPlaying(false);
       } else {
         setIsLoading(true);
-        // Cancel any existing play promise
         if (playPromiseRef.current) {
           playPromiseRef.current.catch(() => {});
           playPromiseRef.current = null;
@@ -434,10 +446,8 @@ export default function Player() {
     const audio = audioRef.current;
     if (!audio || !duration) return;
 
-    // Store whether audio was playing before seeking
     const wasPlaying = isPlaying;
 
-    // Cancel any pending play promise before seeking
     if (playPromiseRef.current) {
       playPromiseRef.current.catch(() => {});
       playPromiseRef.current = null;
@@ -449,12 +459,10 @@ export default function Player() {
     const percentage = clickX / rect.width;
     const newTime = percentage * duration;
 
-    // Update the time
     audio.currentTime = newTime;
     setCurrentTime(newTime);
     setProgress(percentage * 100);
 
-    // If it was playing before, continue playing after seeking
     if (wasPlaying) {
       try {
         const playPromise = audio.play();
@@ -463,10 +471,56 @@ export default function Player() {
         setIsPlaying(true);
         playPromiseRef.current = null;
       } catch (error) {
-        console.error('Error resuming playback after seek:', error);
+        console.error('Error resuming playback:', error);
         playPromiseRef.current = null;
       }
     }
+  };
+
+  const skipForward = (seconds: number) => {
+    const audio = audioRef.current;
+    if (audio && duration) {
+      audio.currentTime = Math.min(duration, audio.currentTime + seconds);
+    }
+  };
+
+  const skipBackward = (seconds: number) => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.currentTime = Math.max(0, audio.currentTime - seconds);
+    }
+  };
+
+  const toggleShuffle = () => {
+    if (!isShuffled) {
+      // Generate new shuffled order when enabling shuffle
+      const order = playlist.map((_, i) => i);
+      shuffleArray(order);
+      setShuffledOrder(order);
+    }
+    setIsShuffled(!isShuffled);
+  };
+
+  const cycleRepeatMode = () => {
+    const modes: RepeatMode[] = ['off', 'all', 'one'];
+    const currentIndex = modes.indexOf(repeatMode);
+    const nextMode = modes[(currentIndex + 1) % modes.length];
+    setRepeatMode(nextMode);
+  };
+
+  const toggleLike = () => {
+    const songId = `${title}-${subtitle}`;
+    const newLikedSongs = new Set(likedSongs);
+    
+    if (isLiked) {
+      newLikedSongs.delete(songId);
+    } else {
+      newLikedSongs.add(songId);
+    }
+    
+    setLikedSongs(newLikedSongs);
+    setIsLiked(!isLiked);
+    localStorage.setItem('likedSongs', JSON.stringify([...newLikedSongs]));
   };
 
   const formatTime = (seconds: number) => {
@@ -477,18 +531,19 @@ export default function Player() {
     return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-
   // Don't render until mounted to avoid hydration mismatch
   if (!mounted) {
     return (
       <div className="min-h-screen w-full bg-[#0B1026] text-white flex flex-col font-sans relative overflow-hidden items-center justify-center">
-        <div className="text-slate-400">Loading...</div>
+        <div className="text-slate-400">Yuklanmoqda...</div>
       </div>
     );
   }
 
+  const currentIndex = getCurrentIndex();
+
   return (
-    <div className="min-h-screen w-full bg-[#0B1026] text-white flex flex-col font-sans relative overflow-hidden items-center justify-center">
+    <div className="min-h-screen w-full bg-[#0B1026] text-white flex flex-col font-sans relative overflow-hidden">
       
       {/* Hidden Audio Element */}
       {musicUrl && (
@@ -505,117 +560,380 @@ export default function Player() {
       
       {/* Background Ambience */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[20%] left-1/2 -translate-x-1/2 w-[80vw] h-[80vw] bg-[#7C7AF3]/10 rounded-full blur-[100px]"></div>
-        <div className="absolute bottom-[10%] right-[10%] w-[60vw] h-[60vw] bg-[#2EB068]/10 rounded-full blur-[80px]"></div>
+        <div 
+          className="absolute top-[20%] left-1/2 -translate-x-1/2 w-[80vw] h-[80vw] rounded-full blur-[100px] transition-all duration-1000"
+          style={{ 
+            background: isPlaying 
+              ? 'radial-gradient(circle, rgba(238,125,70,0.15) 0%, rgba(124,122,243,0.1) 50%, transparent 70%)' 
+              : 'radial-gradient(circle, rgba(124,122,243,0.1) 0%, transparent 70%)',
+            transform: `translate(-50%, ${isPlaying ? '-5%' : '0'}) scale(${isPlaying ? 1.1 : 1})`
+          }}
+        />
+        <div 
+          className="absolute bottom-[10%] right-[10%] w-[60vw] h-[60vw] bg-[#2EB068]/10 rounded-full blur-[80px] transition-all duration-1000"
+          style={{ opacity: isPlaying ? 0.8 : 0.4 }}
+        />
+        
+        {/* Animated particles when playing */}
+        {isPlaying && (
+          <>
+            <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-orange-400/30 rounded-full animate-ping" />
+            <div className="absolute top-1/3 right-1/4 w-1 h-1 bg-violet-400/40 rounded-full animate-ping" style={{ animationDelay: '0.5s' }} />
+            <div className="absolute bottom-1/3 left-1/3 w-1.5 h-1.5 bg-emerald-400/30 rounded-full animate-ping" style={{ animationDelay: '1s' }} />
+          </>
+        )}
       </div>
 
-      {/* Main Content Container - Compact for Draggable/Modal feel */}
-      <div className="relative z-10 w-full max-w-md h-full max-h-[90vh] flex flex-col items-center justify-between px-6 pb-8">
+      {/* Main Content */}
+      <div className="relative z-10 w-full h-full min-h-screen flex flex-col items-center">
         
-        {/* Header - Compact */}
-        <header className="w-full flex justify-between items-center py-4">
+        {/* Header */}
+        <header className="w-full max-w-md flex justify-between items-center px-6 py-5">
           <Link href="/dashboard">
-             <button className="w-10 h-10 bg-[#1C2340] hover:bg-[#252d4d] rounded-full flex items-center justify-center transition-colors shadow-lg shadow-black/20">
-               <ChevronLeft className="w-5 h-5 text-white" />
-             </button>
+            <button className="w-11 h-11 bg-white/5 hover:bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center transition-all duration-300 border border-white/10 hover:border-white/20 hover:scale-105 active:scale-95">
+              <ChevronLeft className="w-5 h-5 text-white/80" />
+            </button>
           </Link>
-          <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">Playing Now</span>
-          <button className="w-10 h-10 bg-[#1C2340] hover:bg-[#252d4d] rounded-full flex items-center justify-center transition-colors shadow-lg shadow-black/20">
-            <Menu className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold tracking-[0.2em] text-white/40 uppercase">Ijro Qilinmoqda</span>
+            {isPlaying && (
+              <div className="flex items-center gap-0.5">
+                <div className="w-0.5 h-3 bg-orange-400 rounded-full animate-pulse" />
+                <div className="w-0.5 h-4 bg-orange-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <div className="w-0.5 h-2 bg-orange-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={() => setShowPlaylist(true)}
+            className="w-11 h-11 bg-white/5 hover:bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center transition-all duration-300 border border-white/10 hover:border-white/20 hover:scale-105 active:scale-95"
+          >
+            <ListMusic className="w-5 h-5 text-white/80" />
           </button>
         </header>
 
-        {/* Album Art - Scaled Down */}
-        <div className="relative w-[60vw] max-w-[240px] aspect-square rounded-full bg-[#151b33] flex items-center justify-center shadow-[15px_15px_40px_#050813,-15px_-15px_40px_#111839] my-4">
-           {/* Inner circle for depth */}
-           <div className="absolute inset-2 rounded-full border border-white/5"></div>
-           
-           {/* Image Placeholder / Gradient */}
-           <div className="w-[90%] h-[90%] rounded-full overflow-hidden relative" style={{ animation: isPlaying ? 'spin 10s linear infinite' : 'none' }}>
-             <div className="absolute inset-0 bg-gradient-to-br from-[#1C2340] to-[#0B1026]"></div>
-             {/* Abstract visual */}
-             <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center opacity-60 mix-blend-overlay"></div>
-             </div>
-           </div>
-
-        </div>
-
-        {/* Info - Compact */}
-        <div className="text-center space-y-1 mt-4">
-          <h1 className="text-2xl font-bold text-white tracking-wide">{title}</h1>
-          <p className="text-slate-400 text-base">{subtitle}</p>
-        </div>
-
-        {/* Progress - Compact */}
-        <div className="w-full mt-6 space-y-2">
-          <div 
-            className="relative w-full h-1 bg-[#1C2340] rounded-full cursor-pointer"
-            onClick={handleProgressClick}
-          >
+        {/* Album Art */}
+        <div className="flex-1 flex items-center justify-center px-6 py-4">
+          <div className="relative w-[70vw] max-w-[280px] aspect-square">
+            {/* Outer glow ring */}
             <div 
-              className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#EE7D46] to-[#F29E75] rounded-full transition-all"
-              style={{ width: `${progress}%` }}
+              className="absolute inset-[-8px] rounded-full transition-all duration-700"
+              style={{ 
+                background: isPlaying 
+                  ? 'conic-gradient(from 0deg, #EE7D46, #F29E75, #EE7D46, transparent, #EE7D46)' 
+                  : 'transparent',
+                opacity: isPlaying ? 0.3 : 0,
+                animation: isPlaying ? 'spin 8s linear infinite' : 'none'
+              }}
+            />
+            
+            {/* Main disc */}
+            <div 
+              className="relative w-full h-full rounded-full bg-gradient-to-br from-[#1a2240] to-[#0d1225] flex items-center justify-center overflow-hidden"
+              style={{
+                boxShadow: isPlaying 
+                  ? '0 25px 50px -12px rgba(238,125,70,0.25), inset 0 1px 0 rgba(255,255,255,0.1)' 
+                  : '0 25px 50px -12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)',
+                animation: isPlaying ? 'spin 20s linear infinite' : 'none'
+              }}
             >
+              {/* Vinyl grooves effect */}
+              <div className="absolute inset-0 rounded-full" style={{ 
+                background: 'repeating-radial-gradient(circle at 50% 50%, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)'
+              }} />
+              
+              {/* Inner circle with image */}
+              <div className="w-[65%] h-[65%] rounded-full overflow-hidden relative border-4 border-[#0B1026]">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#1C2340] to-[#0B1026]" />
+                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center opacity-70" />
+                
+                {/* Center hole */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-[#0B1026] rounded-full border border-white/10" />
+              </div>
+            </div>
+            
+            {/* Play indicator light */}
+            <div 
+              className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full transition-all duration-500"
+              style={{ 
+                background: isPlaying ? '#EE7D46' : '#374151',
+                boxShadow: isPlaying ? '0 0 20px #EE7D46, 0 0 40px rgba(238,125,70,0.5)' : 'none'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Info & Controls Container */}
+        <div className="w-full max-w-md px-6 pb-8 space-y-6">
+          
+          {/* Song Info */}
+          <div className="flex items-center justify-between">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold text-white truncate tracking-tight">{title}</h1>
+              <p className="text-white/50 text-sm mt-0.5 truncate">{subtitle}</p>
+            </div>
+            <button 
+              onClick={toggleLike}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+                isLiked 
+                  ? 'bg-rose-500/20 text-rose-400 scale-110' 
+                  : 'bg-white/5 text-white/40 hover:text-white/70 hover:bg-white/10'
+              }`}
+            >
+              <Heart className={`w-5 h-5 transition-all ${isLiked ? 'fill-current' : ''}`} />
+            </button>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div 
+              ref={progressBarRef}
+              className="relative w-full h-1.5 bg-white/10 rounded-full cursor-pointer group"
+              onClick={handleProgressClick}
+            >
+              {/* Buffer indicator */}
+              <div className="absolute left-0 top-0 h-full bg-white/5 rounded-full" style={{ width: '100%' }} />
+              
+              {/* Progress */}
+              <div 
+                className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#EE7D46] to-[#F29E75] rounded-full transition-all duration-100"
+                style={{ width: `${progress}%` }}
+              />
+              
               {/* Thumb */}
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-[#EE7D46] rounded-full shadow-[0_0_8px_#EE7D46] ring-2 ring-[#0B1026]"></div>
+              <div 
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ left: `calc(${progress}% - 8px)` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-white/40 font-medium tabular-nums">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
             </div>
           </div>
-          <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(duration)}</span>
+
+          {/* Main Controls */}
+          <div className="flex items-center justify-center gap-4">
+            {/* Shuffle */}
+            <button 
+              onClick={toggleShuffle}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                isShuffled 
+                  ? 'bg-orange-500/20 text-orange-400' 
+                  : 'bg-transparent text-white/40 hover:text-white/70'
+              }`}
+              title="Aralashtirish (S)"
+            >
+              <Shuffle className="w-4 h-4" />
+            </button>
+
+            {/* Previous */}
+            <button 
+              onClick={playPrevious}
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white/70 hover:text-white bg-white/5 hover:bg-white/10 transition-all duration-300 hover:scale-105 active:scale-95"
+              title="Oldingi (Shift+←)"
+            >
+              <SkipBack className="w-5 h-5 fill-current" />
+            </button>
+            
+            {/* Play/Pause */}
+            <button 
+              onClick={togglePlay}
+              disabled={!musicUrl}
+              className={`w-18 h-18 rounded-full flex items-center justify-center text-white transition-all duration-300 hover:scale-105 active:scale-95 ${
+                !musicUrl 
+                  ? 'bg-gray-700 opacity-50 cursor-not-allowed' 
+                  : isPlaying
+                    ? 'bg-white/10 hover:bg-white/15 border border-white/20'
+                    : 'bg-gradient-to-br from-[#EE7D46] to-[#E85D20]'
+              }`}
+              style={{ 
+                width: '72px', 
+                height: '72px',
+                boxShadow: !isPlaying && musicUrl ? '0 8px 32px rgba(238,125,70,0.4)' : 'none'
+              }}
+              title="Ijro/To'xtatish (Probel)"
+            >
+              {isLoading ? (
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : isPlaying ? (
+                <Pause className="w-7 h-7" />
+              ) : (
+                <Play className="w-7 h-7 ml-1" />
+              )}
+            </button>
+            
+            {/* Next */}
+            <button 
+              onClick={playNext}
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white/70 hover:text-white bg-white/5 hover:bg-white/10 transition-all duration-300 hover:scale-105 active:scale-95"
+              title="Keyingi (Shift+→)"
+            >
+              <SkipForward className="w-5 h-5 fill-current" />
+            </button>
+
+            {/* Repeat */}
+            <button 
+              onClick={cycleRepeatMode}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                repeatMode !== 'off'
+                  ? 'bg-orange-500/20 text-orange-400' 
+                  : 'bg-transparent text-white/40 hover:text-white/70'
+              }`}
+              title="Takrorlash (R)"
+            >
+              {repeatMode === 'one' ? (
+                <Repeat1 className="w-4 h-4" />
+              ) : (
+                <Repeat className="w-4 h-4" />
+              )}
+            </button>
           </div>
+
+          {/* Error message */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
+              <p className="text-red-400 text-sm">{error}</p>
+              {error.includes('qo\'llab-quvvatlanmaydi') && isWebaFormat && (
+                <p className="text-yellow-400/70 text-xs mt-2">
+                  💡 .weba formati qo\'llab-quvvatlanmaydi. MP3 formatiga o\'tkazing.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* No music message */}
+          {!musicUrl && !error && (
+            <div className="text-center py-4">
+              <p className="text-white/30 text-sm">Audio fayl mavjud emas</p>
+            </div>
+          )}
         </div>
-
-        {/* Controls - Compact */}
-        <div className="flex items-center justify-between w-full max-w-[240px] mt-6">
-          <button 
-            onClick={playPrevious}
-            className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors bg-[#0B1026] shadow-[-4px_-4px_8px_#161f47,4px_4px_8px_#000105] active:shadow-inset"
-          >
-            <SkipBack className="w-5 h-5 fill-current" />
-          </button>
-          
-          <button 
-            onClick={togglePlay}
-            disabled={!musicUrl}
-            title="Click to play/pause"
-            className={`w-16 h-16 rounded-full flex items-center justify-center text-white bg-[#EE7D46] shadow-[0_8px_25px_rgba(238,125,70,0.4)] hover:bg-[#f08e5e] hover:scale-105 active:scale-95 transition-all ${!musicUrl ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {isPlaying ? (
-              <Pause className="w-6 h-6 fill-current" />
-            ) : (
-              <Play className="w-6 h-6 fill-current ml-1" />
-            )}
-          </button>
-          
-          <button 
-            onClick={playNext}
-            className="w-12 h-12 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors bg-[#0B1026] shadow-[-4px_-4px_8px_#161f47,4px_4px_8px_#000105] active:shadow-inset"
-          >
-            <SkipForward className="w-5 h-5 fill-current" />
-          </button>
-        </div>
-
-
-        {/* Error message */}
-        {error && (
-          <div className="text-red-400 text-xs mt-4 text-center px-4 space-y-2">
-            <p>{error}</p>
-            {error.includes('Source not supported') && isWebaFormat && (
-              <p className="text-yellow-400 text-[10px] mt-2">
-                💡 Tip: .weba format is not supported by your browser. Convert the file to MP3 or enable R2 public access for better compatibility.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* No music message */}
-        {!musicUrl && !error && (
-          <p className="text-slate-500 text-xs mt-4">No audio file available</p>
-        )}
-
       </div>
+
+      {/* Playlist Drawer */}
+      {showPlaylist && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowPlaylist(false)}
+        >
+          <div 
+            className="absolute bottom-0 left-0 right-0 max-h-[70vh] bg-gradient-to-b from-[#1a2240] to-[#0B1026] rounded-t-3xl overflow-hidden animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center py-3">
+              <div className="w-10 h-1 bg-white/20 rounded-full" />
+            </div>
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pb-4">
+              <h2 className="text-lg font-semibold text-white">Pleylist</h2>
+              <button 
+                onClick={() => setShowPlaylist(false)}
+                className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Playlist Items */}
+            <div className="px-4 pb-8 overflow-y-auto max-h-[calc(70vh-80px)]">
+              {playlist.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-white/30 text-sm">Pleylistda qo'shiqlar yo'q</p>
+                  <Link href="/dashboard" className="text-orange-400 text-sm mt-2 inline-block hover:underline">
+                    Musiqalarni ko'rish →
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {playlist.map((item, index) => {
+                    const isCurrentSong = item.title === title && item.subtitle === subtitle;
+                    const isSongLiked = likedSongs.has(`${item.title}-${item.subtitle}`);
+                    
+                    return (
+                      <button
+                        key={item.id || index}
+                        onClick={() => navigateToSong(item)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 ${
+                          isCurrentSong 
+                            ? 'bg-orange-500/20 border border-orange-500/30' 
+                            : 'bg-white/5 hover:bg-white/10 border border-transparent'
+                        }`}
+                      >
+                        {/* Index/Playing indicator */}
+                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                          {isCurrentSong && isPlaying ? (
+                            <div className="flex items-center gap-0.5">
+                              <div className="w-0.5 h-2 bg-orange-400 rounded-full animate-pulse" />
+                              <div className="w-0.5 h-3 bg-orange-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                              <div className="w-0.5 h-2 bg-orange-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                            </div>
+                          ) : (
+                            <span className={`text-xs font-medium ${isCurrentSong ? 'text-orange-400' : 'text-white/30'}`}>
+                              {index + 1}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Song info */}
+                        <div className="flex-1 text-left min-w-0">
+                          <p className={`text-sm font-medium truncate ${isCurrentSong ? 'text-orange-400' : 'text-white'}`}>
+                            {item.title}
+                          </p>
+                          <p className="text-xs text-white/40 truncate">{item.subtitle}</p>
+                        </div>
+                        
+                        {/* Like indicator */}
+                        {isSongLiked && (
+                          <Heart className="w-4 h-4 text-rose-400 fill-current flex-shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        
+        @keyframes slide-up {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 12px;
+          height: 12px;
+          background: white;
+          border-radius: 50%;
+          cursor: pointer;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+          width: 12px;
+          height: 12px;
+          background: white;
+          border-radius: 50%;
+          cursor: pointer;
+          border: none;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+      `}</style>
     </div>
   );
 }
