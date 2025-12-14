@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { 
   ChevronLeft, 
   Menu, 
@@ -33,7 +33,7 @@ interface PlaylistItem {
   image?: string;
 }
 
-export default function Player() {
+function PlayerContent() {
   const [mounted, setMounted] = useState(false);
   const searchParams = useSearchParams();
   
@@ -935,5 +935,17 @@ export default function Player() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function Player() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen w-full bg-[#0B1026] text-white flex flex-col font-sans relative overflow-hidden items-center justify-center">
+        <div className="text-slate-400">Yuklanmoqda...</div>
+      </div>
+    }>
+      <PlayerContent />
+    </Suspense>
   );
 }

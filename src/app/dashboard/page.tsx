@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { Play, Clock, Heart } from "lucide-react";
 
-type Category = 'Healing' | 'Trending' | 'Sleeping' | 'Top' | 'Music' | 'Relaxation';
+type Category = 'Healing' | 'Trending' | 'Sleeping' | 'Top' | 'Music' | 'Relaxation' | 'Mashhur' | 'Shifo' | 'Uyqu';
 
 interface Item {
   id: string;
