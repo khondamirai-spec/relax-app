@@ -256,30 +256,8 @@ function PlayerContent() {
     // Set volume
     audio.volume = isMuted ? 0 : volume;
     
-    // Test if the URL is accessible
-    fetch(musicUrl)
-      .then(async response => {
-        const contentType = response.headers.get('content-type') || '';
-        console.log('Audio URL check:', {
-          url: musicUrl,
-          status: response.status,
-          contentType,
-          ok: response.ok
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          setError(`Xato ${response.status}: ${errorData.error || 'Faylni yuklash amalga oshmadi.'}`);
-        } else {
-          if (contentType.includes('text/html') || contentType.includes('application/json')) {
-            setError('Fayl mavjud emas. Iltimos, sozlamalarni tekshiring.');
-          }
-        }
-      })
-      .catch(err => {
-        console.error('Failed to check audio URL:', err);
-        setError('Tarmoq xatosi. Iltimos, internet aloqangizni tekshiring.');
-      });
+    // Clear any previous errors when loading new audio
+    setError(null);
 
     const updateProgress = () => {
       if (audio.duration) {
