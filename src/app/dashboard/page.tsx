@@ -21,6 +21,15 @@ interface Item {
   r2PublicUrl?: string;
 }
 
+// Public r2.dev base for the bucket (e.g. https://pub-xxxxxxxx.r2.dev).
+// NEXT_PUBLIC_ prefix is required so it's inlined into this client component.
+const R2_PUBLIC_BASE = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL || '').replace(/\/$/, '');
+
+// Build a direct, CDN-served public URL for an R2 object key.
+// Keys contain spaces/parens, so each must be URL-encoded.
+const r2PublicUrlFor = (key?: string): string =>
+  key && R2_PUBLIC_BASE ? `${R2_PUBLIC_BASE}/${encodeURIComponent(key)}` : '';
+
 export default function Dashboard() {
 
   const items: Item[] = [
@@ -97,7 +106,9 @@ export default function Dashboard() {
         cloudinaryUrl,
         localUrl,
         r2Key,
-        r2PublicUrl,
+        // Prefer an explicit r2PublicUrl, otherwise derive it from the key so
+        // playlist (next/prev) navigation also streams straight from R2.
+        r2PublicUrl: r2PublicUrl || r2PublicUrlFor(r2Key),
         image
       }));
       localStorage.setItem('playlist', JSON.stringify(playlistData));
@@ -119,8 +130,9 @@ export default function Dashboard() {
 
       {/* Featured Card */}
       <div className="px-6 py-6">
-        <Link 
-          href={`/player?title=${encodeURIComponent(items[0].title)}&subtitle=${encodeURIComponent(items[0].subtitle)}&r2Key=${encodeURIComponent(items[0].r2Key || '')}&autoPlay=true`}
+        <Link
+          href={`/player?title=${encodeURIComponent(items[0].title)}&subtitle=${encodeURIComponent(items[0].subtitle)}&r2Key=${encodeURIComponent(items[0].r2Key || '')}&r2PublicUrl=${encodeURIComponent(r2PublicUrlFor(items[0].r2Key))}&autoPlay=true`}
+          prefetch={false}
           onClick={handlePlayClick}
           className="block"
         >
@@ -168,9 +180,10 @@ export default function Dashboard() {
       <div className="px-6 pb-8">
         <div className="grid grid-cols-2 gap-4">
           {items.slice(1).map((item) => (
-            <Link 
+            <Link
               key={item.id}
-              href={`/player?title=${encodeURIComponent(item.title)}&subtitle=${encodeURIComponent(item.subtitle)}&r2Key=${encodeURIComponent(item.r2Key || '')}&autoPlay=true`}
+              href={`/player?title=${encodeURIComponent(item.title)}&subtitle=${encodeURIComponent(item.subtitle)}&r2Key=${encodeURIComponent(item.r2Key || '')}&r2PublicUrl=${encodeURIComponent(r2PublicUrlFor(item.r2Key))}&autoPlay=true`}
+              prefetch={false}
               onClick={handlePlayClick}
               className="block"
             >

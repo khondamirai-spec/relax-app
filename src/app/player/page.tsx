@@ -87,7 +87,6 @@ function PlayerContent() {
   // Only access search params after component is mounted to avoid hydration mismatch
   const title = mounted ? (searchParams.get('title') || 'O\'rmon Tovushlari') : 'O\'rmon Tovushlari';
   const subtitle = mounted ? (searchParams.get('subtitle') || 'Tabiat') : 'Tabiat';
-  const fileId = mounted ? (searchParams.get('fileId') || '') : '';
   const cloudinaryUrl = mounted ? (searchParams.get('cloudinaryUrl') || '') : '';
   const localUrl = mounted ? (searchParams.get('localUrl') || '') : '';
   const r2Key = mounted ? (searchParams.get('r2Key') || '') : '';
@@ -100,8 +99,8 @@ function PlayerContent() {
     setIsLiked(likedSongs.has(songId));
   }, [title, subtitle, likedSongs]);
 
-  // Priority: Cloudinary > R2 Public URL > Local > R2 (via API) > Google Drive
-  const musicUrl = cloudinaryUrl || r2PublicUrl || localUrl || (r2Key ? `/api/r2/stream?key=${encodeURIComponent(r2Key)}` : '') || (fileId ? `/api/stream?id=${fileId}` : '');
+  // Priority: Cloudinary > R2 Public URL (direct from R2 CDN, no origin transfer) > Local > R2 (via API fallback)
+  const musicUrl = cloudinaryUrl || r2PublicUrl || localUrl || (r2Key ? `/api/r2/stream?key=${encodeURIComponent(r2Key)}` : '');
   
   // Warn if using .weba format
   const isWebaFormat = musicUrl.includes('.weba') || r2Key?.endsWith('.weba');
